@@ -1,0 +1,9 @@
+build/
+*.mod  		    # Fortran module files
+*.o
+*.a
+*.so
+*.smod
+__pycache__/
+*.pyc
+heat_diffuser       # the executable
