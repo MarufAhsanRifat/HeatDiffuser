@@ -6,7 +6,7 @@ set(CMAKE_Fortran_STANDARD 2018)
 set(CMAKE_Fortran_STANDARD_RQUIRED ON)
 
 # Build the Fortran Library
-add_library(heat_fortran STATIC heat_core.f90)
+add_library(heat_fortran STATIC heat_core.f90 heat_grid.f90)
 
 # Build the C++ executablea and link
 add_executable(heat_diffuser main.cpp)
