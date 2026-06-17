@@ -3,9 +3,11 @@ module heat_grid
         use, intrinsic :: iso_c_binding, only: c_loc, c_double, c_int, c_ptr, c_null_ptr, c_f_pointer
         implicit none 
         private
+
         real(c_double), allocatable, target, save :: grid_data(:)       ! module-level storage
 
         public :: allocate_grid, fill_initial, get_element, destroy_grid
+        public :: apply_boundary_conditions             
 
 contains
 
@@ -13,6 +15,10 @@ contains
         function allocate_grid(nx, ny) bind( C, name = "allocate_grid") result(grid_ptr)
                 integer(c_int), intent(in), value :: nx, ny
                 type(c_ptr) :: grid_ptr
+                
+                if(allocated(grid_data)) then
+                        deallocate(grid_data)
+                end if
 
                 allocate(grid_data(nx * ny))         
                 grid_data = 0.0_c_double             ! initialize to zero
@@ -26,6 +32,7 @@ contains
         subroutine fill_initial(grid_ptr, nx, ny) bind(C, name="fill_initial")
                 type(c_ptr), intent(in), value :: grid_ptr
                 integer(c_int), intent(in), value :: nx,ny
+
                 real(c_double), pointer:: arr(:)
                 integer :: i, j, idx
                 real(c_double) :: x, y, center_x, center_y, sigma
@@ -47,21 +54,71 @@ contains
                 end do
         end subroutine fill_initial
 
+! ===========================================================================================
+! NEW SUBROUTINE: Apply Dirichlet boundary conditions
+! ===========================================================================================
+        subroutine apply_boundary_conditions(grid_ptr, nx, ny, top, bottom, left, right) &
+                        bind(C, name = "apply_boundary_conditions")
+                
+                type(c_ptr), intent(in), value :: grid_ptr
+                integer(c_int), intent(in), value :: nx, ny
+                real(c_double), intent(in), value :: top, bottom, left, right
+
+                real(c_double), pointer :: arr(:)
+                integer :: i, j, idx
+
+                ! Turn the C pointer into a Fortran 1-D array view
+                call c_f_pointer(grid_ptr, arr, [nx * ny])
+
+                ! -----------Bottom Edge ( j = 1 ) ---------------
+                j = 1
+                do i = 1, nx
+                        idx = (j-1)*nx + i
+                        arr(idx) = bottom
+                end do
+
+                ! -----------Top Edge ( j = ny ) ---------------
+                j = ny
+                do i = 1, nx
+                        idx = (j-1)*nx + i
+                        arr(idx) = top
+                end do
+
+                ! -----------Left Edge ( i = 1 ) ---------------
+                i = 1
+                do j = 1, ny
+                        idx = (j-1)*nx + i
+                        arr(idx) = left
+                end do
+
+                ! -----------Right Edge ( i = nx ) ---------------
+                i = nx
+                do j = 1, ny
+                        idx = (j-1)*nx + i
+                        arr(idx) = right
+                end do
+
+
+        end subroutine apply_boundary_conditions
+! ===========================================================================================
+
+
         ! Get a single grid element ( for testing )
         function get_element(grid_ptr, i, j, nx, ny) bind(C, name="get_element") result(val)
                 type(c_ptr), intent(in), value :: grid_ptr
                 integer(c_int),intent(in), value :: i, j, nx, ny
                 real(c_double) :: val
                 real(c_double), pointer :: arr(:)
+
                 call c_f_pointer(grid_ptr, arr, [nx*ny])
                 val = arr((j-1)*nx + i)
         end function get_element
 
         ! Free the allocated memory
         subroutine destroy_grid() bind(C, name="destroy_grid")
-                ! type(c_int), intent(in), value:: grid_ptr
-                ! We deallocated the module variable
-                deallocate(grid_data)
+                if (allocated(grid_data)) then
+                        deallocate(grid_data)
+                end if
         end subroutine destroy_grid
 
 
