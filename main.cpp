@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstring>
+#include <cmath>
 
 // Declare the Fortran functions as extern "C"
 extern "C" {
@@ -16,8 +17,16 @@ extern "C" {
 				       double left, double right);
 	double get_element(void* grid, int i, int j, int nx, int ny);
 
-	void solve_poisson(void* src, void* dst, int nx, int ny,
+        void solve_poisson(void* src, void* dst, int nx, int ny,
 		           double tol, int max_iter,
+			   int* actual_iter, double* residual);
+
+        void solve_gauss_seidel(void* src, int nx, int ny,
+		           double tol, int max_iter,
+			   int* actual_iter, double* residual);
+
+        void solve_sor(void* src, int nx, int ny,
+		           double tol, int max_iter, double  omega_opt,
 			   int* actual_iter, double* residual);
 
 	void write_grid_binary(void* src, int nx, int ny, char* filename);
@@ -65,23 +74,79 @@ int main() {
 	std::cout << "\nInitial source grid(top row printed first):  \n";
 	print_grid(src, nx, ny);
 
-	// 5. Solve Poisson equation
 	int actual_iter = 0;
 	double residual = 0.0;
-	solve_poisson(src, dst, ny, ny, tol, max_iter, &actual_iter, &residual);
 
-	std::cout << "\nSolver finished: \n";
+	// 5.0 Solve Poisson equation with JACOBI solver
+	solve_poisson(src, dst, nx, ny, tol, max_iter, &actual_iter, &residual);
+
+	std::cout << "\n ================ JACOBI Solver finished ================== \n";
 	std::cout << "  Iterations: " << actual_iter << '\n';
 	std::cout << "  Residual  : " << std::scientific << residual << '\n';
 
-	// 6. Display final solution (guaranteed in src)
+	// 5.1  Display final solution (guaranteed in src)
 	std::cout << "\nFinal steady-state temperature: \n";
 	print_grid(src, nx, ny);
 	
-	// 7. Write the final grid to binary file
-	char filename[]= "temperature.bin";
+	// 5.2 Write the final grid to binary file
+	char filename[]= "temperature_jacobi.bin";
 	write_grid_binary(src, nx, ny, filename);
-	std::cout << "Final grid written to temperature.bin\n"; 
+	std::cout << "Final grid written to temperature_jacobi.bin\n"; 
+
+	// Reset the initial field with Dirichlet boundaries
+	fill_initial(src, nx, ny);
+	apply_boundary_conditions(src, nx, ny, 
+					1.0, 	// top
+					0.0,	// bottom
+					0.0,	// left
+					0.0);	// right
+	
+	// 6.0 Solve Poisson equation with Gauss-Seidel
+	solve_gauss_seidel(src, nx, ny, tol, max_iter, &actual_iter, &residual);
+
+	std::cout << "\n ================ GAUSS-SEIDEL Solver finished ================== \n";
+	std::cout << "  Iterations: " << actual_iter << '\n';
+	std::cout << "  Residual  : " << std::scientific << residual << '\n';
+
+	// 6.1  Display final solution (guaranteed in src)
+	std::cout << "\nFinal steady-state temperature: \n";
+	print_grid(src, nx, ny);
+
+	
+	// 6.2 Write the final grid to binary file
+        char filename2[] =  "temperature_gauss_seidel.bin";
+	write_grid_binary(src, nx, ny, filename2);
+	std::cout << "Final grid written to temperature_gauss_seidel.bin\n"; 
+	
+
+	// Reset the initial field with Dirichlet boundaries
+	fill_initial(src, nx, ny);
+	apply_boundary_conditions(src, nx, ny, 
+					1.0, 	// top
+					0.0,	// bottom
+					0.0,	// left
+					0.0);	// right
+
+	// 7.0 Solve Poisson equation with SOR (optimal omega for laplace)
+	double pi = 3.14159265358979323846;
+	double rho_jacobi = cos(pi/nx);   // approximate spectral radius for square grid
+	double omega_opt = 2.0/ (1.0 + sqrt(1.0 - rho_jacobi * rho_jacobi));
+
+	solve_sor(src, nx, ny, tol, max_iter, omega_opt, &actual_iter, &residual);
+
+	std::cout << "\n ================ SOR Solver finished ================== \n";
+	std::cout<< " Optimal omega = " << omega_opt << '\n';
+	std::cout << "  Iterations: " << actual_iter << '\n';
+	std::cout << "  Residual  : " << std::scientific << residual << '\n';
+
+	// 7.1  Display final solution (guaranteed in src)
+	std::cout << "\nFinal steady-state temperature: \n";
+	print_grid(src, nx, ny);
+	
+	// 7.2 Write the final grid to binary file
+        char filename3[]  = "temperature_sor.bin";
+	write_grid_binary(src, nx, ny, filename3);
+	std::cout << "Final grid written to temperature_sor.bin\n"; 
 	
 	// 8. clean up
 	destroy_grids();

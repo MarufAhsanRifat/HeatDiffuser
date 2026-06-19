@@ -12,6 +12,7 @@ module heat_grid
         public :: allocate_grid_src, allocate_grid_dst, destroy_grids
         public :: fill_initial,  apply_boundary_conditions, get_element
         public :: solve_poisson, write_grid_binary    
+        public :: solve_gauss_seidel, solve_sor
 
 contains
 
@@ -280,5 +281,134 @@ contains
                 close(unit)
 
         end subroutine write_grid_binary
+
+        ! =================================================================================
+        ! Gauss-Seidel subroutine
+        ! Perform one Gauss-Seidel sweep on grid (in-place).
+        ! Returns maximal change (before update) as residual.
+        ! =================================================================================
+        subroutine gauss_seidel_step(grid_ptr, nx, ny, max_change) & 
+                        bind(C, name="gauss_seidel_step")
+                type(c_ptr),    intent(in), value :: grid_ptr
+                integer(c_int), intent(in), value :: nx, ny
+                real(c_double), intent(out)       :: max_change
+
+                real(c_double), pointer :: arr(:)
+                integer :: i, j, idx
+                real(c_double) :: new_val, old_val
+
+                call c_f_pointer(grid_ptr, arr, [nx*ny])
+
+                max_change = 0.0_c_double
+
+                do j = 2, ny-1
+                        do i = 2, nx-1
+                                idx = (j-1)*nx + i
+                                old_val = arr(idx)
+
+                                ! New value uses updated west ( i -1 ) and south  ( j -1 )
+                                ! and old east ( i + 1 ) and north (j+1)
+                                new_val = 0.25_c_double * &
+                                        ( arr((j-1)*nx + i-1)  &    ! west
+                                        + arr((j-1)*nx + i+1)  &    ! east
+                                        + arr((j-2)*nx + i  )  &    ! south
+                                        + arr(  j  *nx + i  ) )     ! north   
+                                arr(idx) = new_val
+                                max_change = max(max_change, abs(new_val - old_val))
+                        end do
+                end do
+        end subroutine gauss_seidel_step
+
+
+        ! =================================================================================
+        ! Gauss-Seidel with Successive Over Relaxation (SOR) subroutine
+        ! =================================================================================
+        subroutine sor_sweep(grid_ptr, nx, ny, omega, max_change)
+                type(c_ptr),    intent(in), value :: grid_ptr
+                integer(c_int), intent(in), value :: nx, ny
+                real(c_double), intent(in)        :: omega
+                real(c_double), intent(out)       :: max_change
+
+                real(c_double), pointer :: arr(:)
+                integer :: i, j, idx
+                real(c_double) :: new_gs, old_val
+
+                call c_f_pointer(grid_ptr, arr, [nx*ny])
+
+                max_change = 0.0_c_double
+
+                do j = 2, ny-1
+                        do i = 2, nx-1
+                                idx = (j-1)*nx + i
+                                old_val = arr(idx)
+
+                                ! New value uses updated west ( i -1 ) and south  ( j -1 )
+                                ! and old east ( i + 1 ) and north (j+1)
+                                new_gs = 0.25_c_double * &
+                                        ( arr((j-1)*nx + i-1)  &    ! west
+                                        + arr((j-1)*nx + i+1)  &    ! east
+                                        + arr((j-2)*nx + i  )  &    ! south
+                                        + arr(  j  *nx + i  ) )     ! north   
+                                
+                                ! SOR update: relax by omega
+                                arr(idx) = old_val + omega * (new_gs - old_val)
+                                max_change = max(max_change, abs(arr(idx) - old_val))
+                        end do
+                end do
+        end subroutine sor_sweep
+
+
+        ! ===================================================================================
+        ! Gauss - Seidel Solver
+        ! ===================================================================================
+        subroutine solve_gauss_seidel(grid_ptr, nx, ny, tol, max_iter, actual_iter, residual) &
+                        bind(C, name="solve_gauss_seidel")
+                type(c_ptr),    intent(in), value :: grid_ptr
+                integer(c_int), intent(in), value :: nx, ny, max_iter
+                real(c_double), intent(in), value :: tol
+                integer(c_int), intent(out)   :: actual_iter
+                real(c_double), intent(out)   :: residual
+
+                integer :: iter
+                real(c_double) :: change
+
+                do iter = 1, max_iter
+                        call gauss_seidel_step(grid_ptr, nx, ny, change)
+                        if (change < tol) then
+                                residual = change
+                                actual_iter = iter
+                                return
+                        end if
+                end do
+                residual = change
+                actual_iter = max_iter
+        end subroutine solve_gauss_seidel
+
+
+        ! ===================================================================================
+        ! SOR solver 
+        ! ===================================================================================
+        subroutine solve_sor(grid_ptr, nx, ny, tol, max_iter, omega,  actual_iter, residual) &
+                        bind(C, name="solve_sor")
+                type(c_ptr),    intent(in), value :: grid_ptr
+                integer(c_int), intent(in), value :: nx, ny, max_iter
+                real(c_double), intent(in), value :: tol, omega
+                integer(c_int), intent(out)   :: actual_iter
+                real(c_double), intent(out)   :: residual
+
+                integer :: iter
+                real(c_double) :: change
+
+                do iter = 1, max_iter
+                        call sor_sweep(grid_ptr, nx, ny, omega, change)
+                        if (change < tol) then
+                                residual = change
+                                actual_iter = iter
+                                return
+                        end if
+                residual = change
+                actual_iter = max_iter
+                end do
+        end subroutine solve_sor
 
 end module heat_grid
