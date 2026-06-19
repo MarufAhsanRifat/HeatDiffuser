@@ -16,7 +16,9 @@ extern "C" {
 				       double left, double right);
 	double get_element(void* grid, int i, int j, int nx, int ny);
 
-	double jacobi_step(void* src, void* dst, int nx, int ny);
+	void solve_poisson(void* src, void* dst, int nx, int ny,
+		           double tol, int max_iter,
+			   int* actual_iter, double* residual);
 }
 
 // Print the grid with top row first ( j = ny down to 1 )
@@ -41,9 +43,10 @@ int main() {
 	int sq = compute_square(val);
 	std::cout<< val << " squared = " << sq << std::endl;
 
-	// 2. Grid Dimentions
-	const int nx = 10;
-	const int ny = 10;
+	// 2. Problem size and parameters 
+	const int nx = 21, ny = 21;
+	const double tol  = 1.0e-6;
+	const int max_iter = 5000;
 
 	// 3. Allocate both grids
 	void* src = allocate_grid_src( nx, ny );
@@ -57,14 +60,21 @@ int main() {
 					0.0,	// left
 					0.0);	// right
 	
-	std::cout << "\nInitial source grid:  \n";
+	std::cout << "\nInitial source grid(top row printed first):  \n";
 	print_grid(src, nx, ny);
 
-	// 5. Perform one Jacobi step
-	double max_change = jacobi_step(src, dst, nx, ny);
-	std::cout << "\nAfter one jacobi step, max change = " << max_change << "\n";
-	std::cout << "Destination grid: \n";
-	print_grid(dst, nx, ny);
+	// 5. Solve Poisson equation
+	int actual_iter = 0;
+	double residual = 0.0;
+	solve_poisson(src, dst, ny, ny, tol, max_iter, &actual_iter, &residual);
+
+	std::cout << "\nSolver finished: \n";
+	std::cout << "  Iterations: " << actual_iter << '\n';
+	std::cout << "  Residual  : " << std::scientific << residual << '\n';
+
+	// 6. Display final solution (guaranteed in src)
+	std::cout << "\nFinal steady-state temperature: \n";
+	print_grid(src, nx, ny);
 
 	// 6. clean up
 	destroy_grids();

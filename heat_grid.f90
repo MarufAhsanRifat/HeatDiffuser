@@ -10,7 +10,7 @@ module heat_grid
         !--- Public Interface ---
         public :: allocate_grid_src, allocate_grid_dst, destroy_grids
         public :: fill_initial,  apply_boundary_conditions, get_element
-        public :: jacobi_step       
+        public :: solve_poisson    
 
 contains
 
@@ -144,21 +144,17 @@ contains
         end function get_element
 
         ! ------------------------------------------------------------------------------------------
-        ! One Jacobi step: update interior from src to dst, return max change 
+        ! Private: perform one Jacobi sweep from src to dst, return max change 
         ! ------------------------------------------------------------------------------------------
-        function jacobi_step(src_ptr, dst_ptr, nx, ny) &
-                       bind(C, name="jacobi_step") result(max_change)
+        subroutine jacobi_step_internal(src, dst, nx, ny, max_change)
 
-        type(c_ptr), intent(in), value :: src_ptr, dst_ptr
-        integer(c_int), intent(in), value :: nx, ny
-        real(c_double) :: max_change
-
-        real(c_double), pointer :: src(:), dst(:)
+        real(c_double), intent(in)  :: src(:)
+        real(c_double), intent(out) :: dst(:)
+        integer,        intent(in)  :: nx, ny
+        real(c_double), intent(out) :: max_change
         integer :: i, j, idx
-        real(c_double) :: stencil_val
 
-        call c_f_pointer(src_ptr, src, [nx*ny])
-        call c_f_pointer(dst_ptr, dst, [nx*ny])
+        real(c_double) :: stencil_val
 
         ! Copy the entire source to destination (include boundaries)
         dst = src
@@ -185,6 +181,59 @@ contains
                 end do 
         end do
 
-        end function jacobi_step
+        end subroutine jacobi_step_internal
+
+        ! ========================================================================================
+        ! Public: solve the heat equation to steady state
+        ! ========================================================================================
+        subroutine solve_poisson(src_ptr, dst_ptr, nx, ny, tol, max_iter, actual_iter, residual ) &
+                  bind(C, name="solve_poisson")
+
+          type(c_ptr),    intent(in), value     :: src_ptr, dst_ptr
+          integer(c_int), intent(in), value     :: nx, ny, max_iter
+          real(c_double), intent(in), value     :: tol
+          integer(c_int), intent(out)           :: actual_iter
+          real(c_double), intent(out)           :: residual
+
+          real(c_double), pointer       :: curr(:), next(:), tmp(:)
+          real(c_double), pointer       :: src_array(:)         ! will point to src memory 
+          integer       :: iter
+          real(c_double)        :: change
+
+          ! Associate Fortran pointers with the C memory
+          call c_f_pointer(src_ptr, src_array, [nx*ny])
+          call c_f_pointer(dst_ptr, next,      [nx*ny])
+
+          ! Start: current = source, next = destination
+          curr => src_array
+
+          do iter = 1, max_iter
+                ! Perform one Jacobi sweep from curr into next
+                call jacobi_step_internal(curr, next, nx, ny, change)
+
+                if (change < tol) then
+                        ! Converged: ensure the result is in curr
+                        if (.not. associated(curr, src_array)) then
+                                src_array = curr        ! copy result back to src
+                        end if
+                        residual = change
+                        actual_iter = iter
+                        return
+                end if
+
+                ! Swap pointers from next iteration
+                tmp  => curr
+                curr => next
+                next => tmp
+          end do
+
+          ! Maximum iterations reached: guarantee result in src
+          if (.not. associated(curr, src_array)) then
+                  src_array = curr
+          end if
+          residual = change             ! best residual from final iteration
+          actual_iter = max_iter
+       
+        end subroutine solve_poisson
 
 end module heat_grid
