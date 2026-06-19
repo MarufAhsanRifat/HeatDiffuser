@@ -1,6 +1,7 @@
 module heat_grid
 
-        use, intrinsic :: iso_c_binding, only: c_loc, c_double, c_int, c_ptr, c_null_ptr, c_f_pointer
+        use, intrinsic :: iso_c_binding, only: c_loc, c_double, c_int, c_char, &
+                c_null_char, c_ptr, c_null_ptr, c_f_pointer
         implicit none 
         private
 
@@ -10,7 +11,7 @@ module heat_grid
         !--- Public Interface ---
         public :: allocate_grid_src, allocate_grid_dst, destroy_grids
         public :: fill_initial,  apply_boundary_conditions, get_element
-        public :: solve_poisson    
+        public :: solve_poisson, write_grid_binary    
 
 contains
 
@@ -165,10 +166,10 @@ contains
                         idx = (j-1) * nx + i
                         stencil_val = 0.25_c_double * &
                                 ( src((j-1)*nx + i-1)   & ! west
-                                + src((j-1)*nx + i-1)   & ! east
+                                + src((j-1)*nx + i+1)   & ! east
                                 + src((j-2)*nx + i  )   & ! south
                                 + src((j)  *nx + i  )  )  ! North
-                        dst(idx) =stencil_val
+                        dst(idx) = stencil_val
                 end do 
         end do
 
@@ -235,5 +236,49 @@ contains
           actual_iter = max_iter
        
         end subroutine solve_poisson
+
+        ! =================================================================================
+        ! Write the Grid to binary files (stram access, no record markers) 
+        ! =================================================================================
+        subroutine write_grid_binary(grid_ptr, nx, ny, filename) & 
+                        bind(C, name="write_grid_binary")
+        
+                type(c_ptr),    intent(in), value :: grid_ptr
+                integer(c_int), intent(in), value :: nx, ny
+                character(kind=c_char), intent(in):: filename(*)
+
+                real(c_double), pointer :: arr(:)
+                integer :: unit, iostat
+                character(len=256) :: fname
+                integer :: k
+
+                ! Convert C string to Fortran string
+                fname =' '
+                k = 1
+                do while(filename(k) /= c_null_char .and. k <= 256)
+                        fname(k:k) = filename(k)
+                        k = k+1
+                end do
+
+                call c_f_pointer(grid_ptr, arr, [nx*ny])
+
+                ! Open a new file for unformatted sequential access
+                open(newunit=unit, file=trim(fname), form='unformatted', &
+                        access='stream', action='write', iostat=iostat)
+
+                if (iostat /= 0) then
+                        print *, 'Error opening file:  ', trim(fname)
+                        return
+                end if
+                
+                ! Write header: nx, ny
+                write(unit) nx, ny
+
+                ! Write the whole temperature array
+                write(unit) arr(1:nx*ny)
+
+                close(unit)
+
+        end subroutine write_grid_binary
 
 end module heat_grid

@@ -19,6 +19,8 @@ extern "C" {
 	void solve_poisson(void* src, void* dst, int nx, int ny,
 		           double tol, int max_iter,
 			   int* actual_iter, double* residual);
+
+	void write_grid_binary(void* src, int nx, int ny, char* filename);
 }
 
 // Print the grid with top row first ( j = ny down to 1 )
@@ -75,8 +77,13 @@ int main() {
 	// 6. Display final solution (guaranteed in src)
 	std::cout << "\nFinal steady-state temperature: \n";
 	print_grid(src, nx, ny);
-
-	// 6. clean up
+	
+	// 7. Write the final grid to binary file
+	char filename[]= "temperature.bin";
+	write_grid_binary(src, nx, ny, filename);
+	std::cout << "Final grid written to temperature.bin\n"; 
+	
+	// 8. clean up
 	destroy_grids();
 	return 0;
 }
