@@ -32,6 +32,15 @@ extern "C" {
 	void write_grid_binary(void* src, int nx, int ny, char* filename);
 }
 
+
+void setup_initial_condition(void* src, int nx, int ny, double top, 
+	       	             double bottom, double left, double right) {
+	// Set up the initial field with Dirichlet boundaries
+	fill_initial(src, nx, ny);
+	apply_boundary_conditions(src, nx, ny, top, bottom, left, right );
+}
+
+
 // Print the grid with top row first ( j = ny down to 1 )
 static void print_grid(void* grid, int nx, int ny) {
 	for (int j=ny; j >= 1; --j){
@@ -63,14 +72,10 @@ int main() {
 	void* src = allocate_grid_src( nx, ny );
 	void* dst = allocate_grid_dst( nx, ny );
 
-	// 4. Set up the initial field with Dirichlet boundaries
-	fill_initial(src, nx, ny);
-	apply_boundary_conditions(src, nx, ny, 
-					1.0, 	// top
-					0.0,	// bottom
-					0.0,	// left
-					0.0);	// right
-	
+	// 4. Setting up the initial conditions
+	double top = 1.0; double bottom = 0.0;
+	double left = 0.0; double right = 0.0;
+	setup_initial_condition(src, nx, ny, top, bottom, left, right);
 	std::cout << "\nInitial source grid(top row printed first):  \n";
 	print_grid(src, nx, ny);
 
@@ -93,15 +98,10 @@ int main() {
 	write_grid_binary(src, nx, ny, filename);
 	std::cout << "Final grid written to temperature_jacobi.bin\n"; 
 
-	// Reset the initial field with Dirichlet boundaries
-	fill_initial(src, nx, ny);
-	apply_boundary_conditions(src, nx, ny, 
-					1.0, 	// top
-					0.0,	// bottom
-					0.0,	// left
-					0.0);	// right
 	
 	// 6.0 Solve Poisson equation with Gauss-Seidel
+
+	setup_initial_condition(src, nx, ny, top, bottom, left, right);
 	solve_gauss_seidel(src, nx, ny, tol, max_iter, &actual_iter, &residual);
 
 	std::cout << "\n ================ GAUSS-SEIDEL Solver finished ================== \n";
@@ -118,20 +118,12 @@ int main() {
 	write_grid_binary(src, nx, ny, filename2);
 	std::cout << "Final grid written to temperature_gauss_seidel.bin\n"; 
 	
-
-	// Reset the initial field with Dirichlet boundaries
-	fill_initial(src, nx, ny);
-	apply_boundary_conditions(src, nx, ny, 
-					1.0, 	// top
-					0.0,	// bottom
-					0.0,	// left
-					0.0);	// right
-
 	// 7.0 Solve Poisson equation with SOR (optimal omega for laplace)
 	double pi = 3.14159265358979323846;
 	double rho_jacobi = cos(pi/nx);   // approximate spectral radius for square grid
 	double omega_opt = 2.0/ (1.0 + sqrt(1.0 - rho_jacobi * rho_jacobi));
 
+	setup_initial_condition(src, nx, ny, top, bottom, left, right);
 	solve_sor(src, nx, ny, tol, max_iter, omega_opt, &actual_iter, &residual);
 
 	std::cout << "\n ================ SOR Solver finished ================== \n";
