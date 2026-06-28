@@ -31,7 +31,7 @@ int main() {
 		
 	// Initialize
 	grid_fill_gaussian(grid);
-	grid_set_boundaries(grid, 1.0, -1.0, 1.0, -1.0);
+	grid_set_boundaries(grid, -2.0, 10.0, -5.0, -5.0);
 	
 	// Solve with Jacobi
 	int iter;
@@ -44,7 +44,7 @@ int main() {
 
 	// Reset and test Gauss-Seidel
 	grid_fill_gaussian(grid);
-	grid_set_boundaries(grid, 1.0, -1.0, 1.0, -1.0);
+	grid_set_boundaries(grid, 1.0, 0.0, 0.0, 0.0);
 	grid_solve_gauss_seidel(grid, tol, max_iter, &iter, &resid);
 	std::cout<<"Gauss-Seidel:	"<< iter <<" iterations, residual= "<< resid << '\n';
 
@@ -54,7 +54,7 @@ int main() {
 
 	// Reset and test SOR
 	grid_fill_gaussian(grid);
-	grid_set_boundaries(grid, 1.0, -1.0, 1.0, -1.0);
+	grid_set_boundaries(grid, 1.0, 1.0, - 1.0, -1.0);
 	double pi	 = 3.14159265358979323846;
 	double rho	 = cos(pi / nx);
 	double omega	 = 2.0 / ( 1.0 + sqrt( 1.0 - rho*rho ));

@@ -6,4 +6,5 @@ build/
 *.smod
 __pycache__/
 *.pyc
+*.html
 heat_diffuser       # the executable
