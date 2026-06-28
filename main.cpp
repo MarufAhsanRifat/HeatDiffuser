@@ -2,7 +2,7 @@
 #include <cmath>
 #include <cstring>
 
-exter "C"{
+extern "C"{
 	void* grid_create(int nx, int ny);
 	void grid_destroy(void* grid);
 
@@ -11,11 +11,11 @@ exter "C"{
 
 	double grid_get_element(void* grid, int i, int j);
 		
-	void grid_solve_jacobi(void* grid, double tol, int max_iter, int* actual iter, 
+	void grid_solve_jacobi(void* grid, double tol, int max_iter, int* actual_iter, 
 			double* residual);
-	void grid_solve_gauss_seidel(void* grid, double tol, int max_iter, int* actual iter, 
+	void grid_solve_gauss_seidel(void* grid, double tol, int max_iter, int* actual_iter, 
 			double* residual);
-	void grid_solve_sor(void* grid, double tol, int max_iter, int* actual iter, 
+	void grid_solve_sor(void* grid, double tol, int max_iter, double omega, int* actual_iter, 
 			double* residual);
 
 	void grid_write_binary(void* grid, char* filename);
@@ -27,12 +27,12 @@ int main() {
 	const int max_iter = 5000;
 
 	// Create grid
-	void* grid = grid_create(nx, ny)
+	void* grid = grid_create(nx, ny);
 		
 	// Initialize
 	grid_fill_gaussian(grid);
-	grid_set_boundaries(grid, 1.0, 0.0, 0.0, 0.0);
-
+	grid_set_boundaries(grid, 1.0, -1.0, 1.0, -1.0);
+	
 	// Solve with Jacobi
 	int iter;
 	double resid;
@@ -44,7 +44,7 @@ int main() {
 
 	// Reset and test Gauss-Seidel
 	grid_fill_gaussian(grid);
-	grid_set_boundaries(grid, 1.0, 0.0, 0.0, 0.0);
+	grid_set_boundaries(grid, 1.0, -1.0, 1.0, -1.0);
 	grid_solve_gauss_seidel(grid, tol, max_iter, &iter, &resid);
 	std::cout<<"Gauss-Seidel:	"<< iter <<" iterations, residual= "<< resid << '\n';
 
@@ -54,7 +54,7 @@ int main() {
 
 	// Reset and test SOR
 	grid_fill_gaussian(grid);
-	grid_set_boundaries(grid, 1.0, 0.0, 0.0, 0.0);
+	grid_set_boundaries(grid, 1.0, -1.0, 1.0, -1.0);
 	double pi	 = 3.14159265358979323846;
 	double rho	 = cos(pi / nx);
 	double omega	 = 2.0 / ( 1.0 + sqrt( 1.0 - rho*rho ));
